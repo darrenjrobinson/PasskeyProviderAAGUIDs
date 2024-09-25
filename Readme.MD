@@ -1,6 +1,6 @@
 # Passkey Provider AAGUID's PowerShell Module
 
-[![PSGallery Version](https://img.shields.io/powershellgallery/v/DIDSearcher.svg?style=flat&logo=powershell&label=PSGallery%20Version)](https://www.powershellgallery.com/packages/DIDSearcher) [![PSGallery Downloads](https://img.shields.io/powershellgallery/dt/DIDSearcher.svg?style=flat&logo=powershell&label=PSGallery%20Downloads)](https://www.powershellgallery.com/packages/DIDSearcher)
+[![PSGallery Version](https://img.shields.io/powershellgallery/v/PasskeyProviderAAGUIDs.svg?style=flat&logo=powershell&label=PSGallery%20Version)](https://www.powershellgallery.com/packages/PasskeyProviderAAGUIDs) [![PSGallery Downloads](https://img.shields.io/powershellgallery/dt/PasskeyProviderAAGUIDs.svg?style=flat&logo=powershell&label=PSGallery%20Downloads)](https://www.powershellgallery.com/packages/PasskeyProviderAAGUIDs)
 
 ## Description
 
@@ -39,6 +39,9 @@ or
 PS> Get-AADGUIDs -cache
 or
 PS> Get-AADGUIDs -MDS -cache
+
+# Get AADGUIDs and return those associated with Windows Hello
+PS> Get-AAGUIDs -cache | Where-Object {$_.name -like '*hello*'}
 
 ```powershell
 Get-AADGUIDs  
