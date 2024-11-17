@@ -1,6 +1,6 @@
 @{
     RootModule           = 'PasskeyProviderAAGUIDS.psm1'
-    ModuleVersion        = '1.0.0'
+    ModuleVersion        = '1.0.1'
     GUID                 = '3deeae5e-dadd-420e-8523-ec6e7cdfd9c9'
     Author               = 'Darren J Robinson'
     Copyright            = '(c) 2024. All rights reserved.'
