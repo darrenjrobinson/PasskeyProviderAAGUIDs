@@ -1,0 +1,65 @@
+name: Refresh AAGUID lists
+
+on:
+  schedule:
+    # Weekly, Monday 00:00 UTC
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-aaguids
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Refresh cached AAGUID lists
+        id: refresh
+        run: ./build/Update-AAGUIDCache.ps1
+
+      - name: Commit and push changes
+        if: steps.refresh.outputs.changed == 'true'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data Readme.MD PasskeyProviderAAGUIDs.psd1
+          git commit -m "v${{ steps.refresh.outputs.version }} - Refreshed AAGUID lists"
+          git push
+
+      # Publishes whenever the manifest version is ahead of the gallery, so a failed publish is retried next run
+      - name: Publish to PowerShell Gallery
+        env:
+          PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
+        run: |
+          $moduleName = 'PasskeyProviderAAGUIDs'
+          $localVersion = [version](Import-PowerShellDataFile "./$moduleName.psd1").ModuleVersion
+          $galleryVersion = [version](Find-PSResource -Name $moduleName -Repository PSGallery).Version.ToString()
+          Write-Host "Local version: $localVersion  Gallery version: $galleryVersion"
+
+          if ($localVersion -le $galleryVersion) {
+            Write-Host 'Gallery is up to date. Nothing to publish.'
+            return
+          }
+          if (-not $env:PSGALLERY_API_KEY) {
+            Write-Host '::warning::PSGALLERY_API_KEY secret is not set. Skipping publish.'
+            return
+          }
+
+          $staging = Join-Path $env:RUNNER_TEMP $moduleName
+          New-Item -ItemType Directory -Path (Join-Path $staging 'data') -Force | Out-Null
+          Copy-Item "./$moduleName.psd1", "./$moduleName.psm1", './LICENSE', './Readme.MD' -Destination $staging
+          Copy-Item './data/*.json' -Destination (Join-Path $staging 'data')
+
+          Test-ModuleManifest -Path (Join-Path $staging "$moduleName.psd1") | Out-Null
+          Publish-PSResource -Path $staging -Repository PSGallery -ApiKey $env:PSGALLERY_API_KEY
+          Write-Host "Published $moduleName $localVersion"
