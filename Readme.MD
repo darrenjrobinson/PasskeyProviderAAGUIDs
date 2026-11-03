@@ -552,6 +552,22 @@ c1bee13f-f347-4f53-9cd4-e8a2f98ee008 ZTPass SmartAuth FIPS
 ```
 <!-- AAGUIDS:mds:end -->
 
+## Testing
+
+The tests use [Pester](https://pester.dev) 5.5 or later (`Install-Module Pester -MinimumVersion 5.5 -Scope CurrentUser -Force -SkipPublisherCheck`).
+
+```powershell
+# Validate the cached data, the module and the refresh script (offline)
+./tests/Invoke-Tests.ps1
+
+# Also compare the cached lists with the live upstream lists
+./tests/Invoke-Tests.ps1 -IncludeLive
+
+# Test the module package exactly as it would be published
+./tests/Invoke-Tests.ps1 -Path (./build/New-ModulePackage.ps1)
+```
+
+The same tests run in GitHub Actions on every push and pull request, and the weekly refresh only commits and publishes when they pass.
 ## Keep up to date
 
 * [Visit my blog](https://blog.darrenjrobinson.com)
