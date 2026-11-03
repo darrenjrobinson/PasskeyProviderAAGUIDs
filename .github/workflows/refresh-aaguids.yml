@@ -1,0 +1,88 @@
+name: Refresh AAGUID lists
+
+on:
+  schedule:
+    # Weekly, Monday 00:00 UTC
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-aaguids
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Pester
+        run: |
+          if (-not (Get-Module -Name Pester -ListAvailable | Where-Object Version -ge '5.5.0')) {
+            Install-Module -Name Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force -SkipPublisherCheck
+          }
+
+      # Throws (failing the job before anything is committed) if upstream data is empty, malformed or truncated
+      - name: Refresh cached AAGUID lists
+        id: refresh
+        run: ./build/Update-AAGUIDCache.ps1
+
+      # Nothing is committed or published unless the refreshed data, module and build script pass
+      - name: Test refreshed data
+        run: ./tests/Invoke-Tests.ps1 -OutputPath test-results-refresh.xml
+
+      - name: Commit and push changes
+        if: steps.refresh.outputs.changed == 'true'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data Readme.MD PasskeyProviderAAGUIDs.psd1
+          git commit -m "v${{ steps.refresh.outputs.version }} - Refreshed AAGUID lists"
+          git push
+
+      - name: Stage module package
+        id: package
+        run: |
+          $package = ./build/New-ModulePackage.ps1 -Destination $env:RUNNER_TEMP
+          "path=$package" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Test module package
+        run: ./tests/Invoke-Tests.ps1 -Path '${{ steps.package.outputs.path }}' -OutputPath test-results-package.xml
+
+      # Publishes whenever the manifest version is ahead of the gallery, so a failed publish is retried next run
+      - name: Publish to PowerShell Gallery
+        env:
+          PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
+          PACKAGE_PATH: ${{ steps.package.outputs.path }}
+        run: |
+          $moduleName = 'PasskeyProviderAAGUIDs'
+          $localVersion = [version](Import-PowerShellDataFile (Join-Path $env:PACKAGE_PATH "$moduleName.psd1")).ModuleVersion
+          $galleryVersion = [version](Find-PSResource -Name $moduleName -Repository PSGallery).Version.ToString()
+          Write-Host "Local version: $localVersion  Gallery version: $galleryVersion"
+
+          if ($localVersion -le $galleryVersion) {
+            Write-Host 'Gallery is up to date. Nothing to publish.'
+            return
+          }
+          if (-not $env:PSGALLERY_API_KEY) {
+            Write-Host '::warning::PSGALLERY_API_KEY secret is not set. Skipping publish.'
+            return
+          }
+
+          Publish-PSResource -Path $env:PACKAGE_PATH -Repository PSGallery -ApiKey $env:PSGALLERY_API_KEY
+          Write-Host "Published $moduleName $localVersion"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: refresh-test-results
+          path: test-results-*.xml
+          if-no-files-found: ignore
