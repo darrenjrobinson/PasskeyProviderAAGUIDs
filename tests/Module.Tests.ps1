@@ -78,6 +78,48 @@ Describe 'Get-AAGUIDs <Label>' -ForEach @(
     }
 }
 
+# Offline tests of the live path, so they also run in Windows PowerShell 5.1 CI. Regression test: in 5.1 a
+# PSCustomObject has no .Length, and the live path reported "No data returned" for valid upstream data.
+Describe 'Get-AAGUIDs live path with a mocked upstream' {
+    BeforeAll {
+        Mock -ModuleName PasskeyProviderAAGUIDs Invoke-RestMethod {
+            [PSCustomObject]@{
+                'bbbbbbbb-0000-4000-8000-000000000002' = [PSCustomObject]@{ name = 'Zeta Provider' }
+                'aaaaaaaa-0000-4000-8000-000000000001' = [PSCustomObject]@{ name = 'Alpha Provider' }
+                'de1e552d-db1d-4423-a619-566b625cdc84' = [PSCustomObject]@{ name = 'Upstream Authenticator' }
+            }
+        }
+    }
+
+    It 'returns the upstream entries plus missing additional AAGUIDs, sorted by Name' {
+        $results = @(Get-AAGUIDs)
+        $results.Count | Should -Be 4
+        ($results.Name -join '|') | Should -Be ((($results | Sort-Object -Property Name).Name) -join '|')
+        $results.AAGUID | Should -Contain 'aaaaaaaa-0000-4000-8000-000000000001'
+        $results.AAGUID | Should -Contain '90a3ccdf-635c-4729-a248-9b709135078f'
+    }
+
+    It 'does not duplicate an additional AAGUID that upstream already has' {
+        $matching = @(Get-AAGUIDs | Where-Object AAGUID -eq 'de1e552d-db1d-4423-a619-566b625cdc84')
+        $matching.Count | Should -Be 1
+        $matching[0].Name | Should -Be 'Upstream Authenticator'
+    }
+
+    It 'requests aaguid.json by default and combined_aaguid.json with -MDS' {
+        Get-AAGUIDs | Out-Null
+        Should -Invoke -ModuleName PasskeyProviderAAGUIDs Invoke-RestMethod -Times 1 -Exactly -ParameterFilter { $Uri -like '*/aaguid.json' }
+        Get-AAGUIDs -MDS | Out-Null
+        Should -Invoke -ModuleName PasskeyProviderAAGUIDs Invoke-RestMethod -Times 1 -Exactly -ParameterFilter { $Uri -like '*/combined_aaguid.json' }
+    }
+
+    It 'writes an error when upstream returns no entries' {
+        Mock -ModuleName PasskeyProviderAAGUIDs Invoke-RestMethod { [PSCustomObject]@{} }
+        $results = @(Get-AAGUIDs -ErrorVariable errors -ErrorAction SilentlyContinue)
+        $results.Count | Should -Be 0
+        "$errors" | Should -BeLike '*No data returned*'
+    }
+}
+
 Describe 'Get-AAGUIDs live lists match the cache' -Tag 'Live' -ForEach @(
     @{ Label = 'providers'; Live = @{}; Cache = @{ cache = $true } }
     @{ Label = 'MDS'; Live = @{ MDS = $true }; Cache = @{ MDS = $true; cache = $true } }

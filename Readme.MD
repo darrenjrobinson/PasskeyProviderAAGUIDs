@@ -42,9 +42,6 @@ PS> Get-AAGUIDs -cache
 or
 PS> Get-AAGUIDs -MDS -cache
 
-# Get AAGUIDs and return those associated with Windows Hello
-PS> Get-AAGUIDs -cache | Where-Object {$_.name -like '*hello*'}
-
 ```powershell
 Get-AAGUIDs  
 ```
@@ -551,6 +548,25 @@ b415094c-49d3-4c8b-b3fe-7d0ad28a6bc4 ZTPass SmartAuth
 c1bee13f-f347-4f53-9cd4-e8a2f98ee008 ZTPass SmartAuth FIPS
 ```
 <!-- AAGUIDS:mds:end -->
+
+
+### Get AAGUIDs and return those associated with Windows Hello
+
+
+```powershell
+Get-AAGUIDs -cache | Where-Object {$_.name -like '*hello*'}
+```
+
+### Output
+
+```powershell
+
+AAGUID                               Name
+------                               ----
+08987058-cadc-4b81-b6e1-30de50dcbe96 Windows Hello
+6028b017-b1d4-4c02-b4b3-afcdafc96bb2 Windows Hello
+9ddd1817-af5a-4672-a2b9-3e3dd95000a9 Windows Hello
+```
 
 ## Testing
 

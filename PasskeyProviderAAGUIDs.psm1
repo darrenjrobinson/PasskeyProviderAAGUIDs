@@ -71,9 +71,13 @@ https://blog.darrenjrobinson.com/passkey_provider_aaguids/
             }
         }
         $result = Invoke-RestMethod -Method Get -Uri $Path -ContentType 'application/json'
-        if ($result.Length -gt 0) {
+        # Count the AAGUID properties rather than $result.Length, which is $null for a PSCustomObject in Windows PowerShell 5.1
+        $guidsList = @()
+        if ($result -is [PSCustomObject]) {
+            $guidsList = @($result.PSObject.Properties | Select-Object -ExpandProperty Name)
+        }
+        if ($guidsList.Count -gt 0) {
             $AAGuids = @()
-            $guidsList = $result | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty Name
 
             foreach ($AAGuid in $guidsList) {
                 $customObject = [PSCustomObject]@{
@@ -98,6 +102,11 @@ https://blog.darrenjrobinson.com/passkey_provider_aaguids/
         }
     }
     catch {
-        Write-Error $_.ErrorDetails.Message
+        if ($_.ErrorDetails.Message) {
+            Write-Error $_.ErrorDetails.Message
+        }
+        else {
+            Write-Error $_.Exception.Message
+        }
     }
 }
