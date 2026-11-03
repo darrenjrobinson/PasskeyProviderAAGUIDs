@@ -77,6 +77,8 @@ finally {
     $env:AAGUID_MODULE_PATH = $previousModulePath
 }
 
+# Always set an exit code, so callers checking $LASTEXITCODE never see a stale or $null value
 if ($result.Result -ne 'Passed') {
     exit 1
 }
+exit 0

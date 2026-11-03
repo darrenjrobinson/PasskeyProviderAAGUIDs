@@ -40,7 +40,7 @@ $dataPath = Join-Path $Root 'data'
 $manifestPath = Join-Path $Root 'PasskeyProviderAAGUIDs.psd1'
 $readmePath = Join-Path $Root 'Readme.MD'
 $utf8NoBom = [Text.UTF8Encoding]::new($false)
-$guidPattern = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+$guidPattern = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z'
 $maxRemovedRatio = 0.1
 
 function Assert-AAGUIDEntry {
@@ -71,13 +71,27 @@ function Get-UpstreamJson {
     }
 
     try {
+        # ConvertFrom-Json keeps only the last of repeated keys, so read the raw keys with JsonDocument first
+        $document = [System.Text.Json.JsonDocument]::Parse($content)
+        try {
+            $isObject = $document.RootElement.ValueKind -eq [System.Text.Json.JsonValueKind]::Object
+            $keys = if ($isObject) { @($document.RootElement.EnumerateObject() | ForEach-Object Name) } else { @() }
+        }
+        finally {
+            $document.Dispose()
+        }
         $result = ConvertFrom-Json -InputObject $content -NoEnumerate
     }
     catch {
         throw "Upstream $FileName is not valid JSON: $($_.Exception.Message)"
     }
-    if (-not $content.TrimStart().StartsWith('{') -or $result -isnot [PSCustomObject]) {
+    if (-not $isObject -or $result -isnot [PSCustomObject]) {
         throw "Upstream $FileName is not a JSON object keyed by AAGUID."
+    }
+
+    $duplicates = @($keys | Group-Object | Where-Object Count -gt 1)
+    if ($duplicates.Count -gt 0) {
+        throw "Upstream $($FileName): duplicate AAGUIDs $($duplicates.Name -join ', ')."
     }
     return $result
 }
@@ -180,7 +194,7 @@ foreach ($cache in $caches) {
 # All checks passed, write the changes
 $dataChanged = $false
 foreach ($cache in $caches) {
-    if ($cache.Json -ne $cache.ExistingJson) {
+    if ($cache.Json -cne $cache.ExistingJson) {
         $dataChanged = $true
         [IO.File]::WriteAllText($cache.Path, $cache.Json, $utf8NoBom)
 
@@ -194,7 +208,7 @@ foreach ($cache in $caches) {
     }
 }
 
-$readmeChanged = $newReadme -ne $readme
+$readmeChanged = $newReadme -cne $readme
 if ($readmeChanged) {
     [IO.File]::WriteAllText($readmePath, $newReadme, $utf8NoBom)
     Write-Host 'Readme.MD sample output updated'

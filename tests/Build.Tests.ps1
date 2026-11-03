@@ -146,6 +146,21 @@ Describe 'Update-AAGUIDCache.ps1' {
             $result.changed | Should -Be 'true'
             (Read-Data -Repo $repo -File 'aaguid.json').AAGUID | Should -Not -Contain (New-TestGuid 1)
         }
+
+        It 'writes a rename that only changes capitalisation and bumps the version' {
+            $version = [version](Get-ManifestVersion $repo)
+            $data = New-UpstreamData
+            $data.Providers.Remove((New-TestGuid 1))
+            $data.Combined.Remove((New-TestGuid 1))
+            $data.Providers[(New-TestGuid 2)] = @{ name = 'PROVIDER 2' }
+            $data.Combined[(New-TestGuid 2)] = @{ name = 'PROVIDER 2' }
+
+            $result = Invoke-Build -Repo $repo -Upstream (Save-Upstream -Data $data)
+            $result.changed | Should -Be 'true'
+            [version]$result.version | Should -BeGreaterThan $version
+            (Read-Data -Repo $repo -File 'aaguid.json' | Where-Object AAGUID -eq (New-TestGuid 2)).Name | Should -BeExactly 'PROVIDER 2'
+            Get-Content -Path (Join-Path $repo 'Readme.MD') -Raw | Should -MatchExactly 'PROVIDER 2'
+        }
     }
 
     It 'does not bump the version with -NoVersionBump' {
@@ -178,6 +193,8 @@ Describe 'Update-AAGUIDCache.ps1' {
             @{ Case = 'a JSON array'; Message = 'not a JSON object' }
             @{ Case = 'an invalid AAGUID'; Message = 'not a valid lowercase AAGUID' }
             @{ Case = 'an uppercase AAGUID'; Message = 'not a valid lowercase AAGUID' }
+            @{ Case = 'an AAGUID with a trailing newline'; Message = 'not a valid lowercase AAGUID' }
+            @{ Case = 'a repeated AAGUID key'; Message = 'duplicate AAGUIDs' }
             @{ Case = 'an empty name'; Message = 'empty or missing name' }
             @{ Case = 'a missing name'; Message = 'empty or missing name' }
             @{ Case = 'a replacement character'; Message = 'control or replacement characters' }
@@ -198,6 +215,10 @@ Describe 'Update-AAGUIDCache.ps1' {
                 'a JSON array' { $providersJson = '[{"name": "Windows Hello"}]' }
                 'an invalid AAGUID' { $data.Providers['not-a-guid'] = @{ name = 'Bad' } }
                 'an uppercase AAGUID' { $data.Providers['ABCDEF01-0000-4000-8000-000000000001'] = @{ name = 'Upper' } }
+                'an AAGUID with a trailing newline' { $data.Providers["$(New-TestGuid 5000)`n"] = @{ name = 'Bad' } }
+                'a repeated AAGUID key' {
+                    $providersJson = ($data.Providers | ConvertTo-Json -Depth 3) -replace '^\{', "{`n  `"$(New-TestGuid 1)`": { `"name`": `"Conflicting`" },"
+                }
                 'an empty name' { $data.Providers[(New-TestGuid 5000)] = @{ name = '' } }
                 'a missing name' { $data.Providers[(New-TestGuid 5000)] = @{ icon_light = 'data:image/png;base64,' } }
                 'a replacement character' { $data.Providers[(New-TestGuid 5000)] = @{ name = "Bad $([char]0xFFFD) name" } }

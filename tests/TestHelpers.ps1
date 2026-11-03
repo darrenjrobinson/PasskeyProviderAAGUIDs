@@ -14,4 +14,4 @@ function Read-JsonFile {
     return @((Get-Content -Path $Path -Raw -Encoding UTF8 | ConvertFrom-Json))
 }
 
-$GuidPattern = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+$GuidPattern = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z'
